@@ -1,4 +1,4 @@
-<!-- 월례 골프 모임 스코어보드 v3 · 5가지 순위 방식 선택 + 18홀 입력 + 사진 AI 인식 -->
+<!-- 버디 골프회 스코어보드 · GitHub Pages localStorage 버전 (2026) · 사진첩 + 공유용 내보내기 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -145,6 +145,24 @@ input[readonly]{background:#EEF2ED;color:var(--ink-soft)}
 .char .sc{text-align:right;font-family:var(--num);font-size:15px;flex-shrink:0}
 .char .sc .d{font-size:13px;opacity:.95}
 
+/* 특별기록 트로피 */
+.char .trophies{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+.tphy{display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,.22);border-radius:999px;padding:2px 7px 2px 3px;font-size:11px;font-weight:700;line-height:1}
+.tphy svg{width:20px;height:20px;flex-shrink:0}
+.tphy .cnt{font-family:var(--num);font-size:12px}
+.ach-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.ach-card h2{margin-bottom:4px}
+.ach-legend{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.ach-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:12px;color:#fff}
+.ach-item svg{width:38px;height:38px;flex-shrink:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.ach-item .at{font-weight:800;font-size:14px;line-height:1.15}
+.ach-item .ad{font-size:11px;opacity:.92;margin-top:1px}
+.ach-item .atot{margin-left:auto;text-align:right;font-family:var(--num)}
+.ach-item .atot b{font-size:20px;display:block;line-height:1}
+.ach-item .atot span{font-size:10px;opacity:.9}
+.ach-empty{font-size:12px;color:var(--ink-soft);margin-top:10px}
+@media(max-width:420px){.ach-legend{grid-template-columns:1fr}}
+
 /* 홀별 상세 (기록 탭) */
 .name-btn{background:none;border:0;padding:0;font:inherit;color:var(--board);font-weight:600;cursor:pointer;text-align:left;display:inline-flex;align-items:center;gap:4px}
 .name-btn .caret{font-size:10px;transition:transform .2s}
@@ -192,9 +210,7 @@ input[readonly]{background:#EEF2ED;color:var(--ink-soft)}
   <h1>버디 골프회</h1>
 </header>
 
-<div id="notice" class="notice hide">
-  이 기록은 링크를 가진 멤버 모두가 함께 보고 입력하는 <b>공유 스코어보드</b>입니다. 순위 방식을 바꾸면 모두에게 같이 적용됩니다.
-</div>
+<div id="notice" class="notice hide"></div>
 
 <main id="view"></main>
 
@@ -248,23 +264,161 @@ const RANK_CHARS=[
   {emoji:'🐢',title:'해저드 마스터',line:'즐기는 자가 진정한 승자',bg:'linear-gradient(135deg,#7C8290,#BEC3CC)',fg:'#22262E'},
 ];
 
-/* ── 저장소 ───────────────── */
+/* ── 특별기록 트로피 캐릭터 ─────────────────
+   각 캐릭터를 SVG로 직접 그려 고유한 마스코트로 표현.
+   key는 집계 로직에서 사용, svg(size)는 크기 지정 렌더러.       */
+const ACHIEVEMENTS=[
+  { key:'holeInOne', title:'홀인원', short:'HIO',
+    desc:'단 한 번에! 골프의 전설',
+    bg:'linear-gradient(135deg,#8E44AD,#C39BD3)',
+    svg:s=>`<svg viewBox="0 0 48 48" width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><radialGradient id="hioSun" cx="50%" cy="42%" r="60%"><stop offset="0%" stop-color="#FFF3B0"/><stop offset="100%" stop-color="#F5C542"/></radialGradient></defs>
+      <circle cx="24" cy="22" r="18" fill="url(#hioSun)"/>
+      ${[...Array(8)].map((_,i)=>{const a=i*45*Math.PI/180;const x1=24+Math.cos(a)*19,y1=22+Math.sin(a)*19,x2=24+Math.cos(a)*23,y2=22+Math.sin(a)*23;return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#F5C542" stroke-width="2" stroke-linecap="round"/>`}).join('')}
+      <circle cx="24" cy="22" r="13" fill="#fff"/>
+      <circle cx="20" cy="19" r="1.4" fill="#5B3A17"/><circle cx="28" cy="19" r="1.4" fill="#5B3A17"/>
+      <path d="M19 25 Q24 30 29 25" stroke="#5B3A17" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="17" cy="24" r="2" fill="#FF9EB5" opacity=".7"/><circle cx="31" cy="24" r="2" fill="#FF9EB5" opacity=".7"/>
+      <path d="M31 12 l2.2 1.3 -0.6 -2.5 1.9 -1.7 -2.5 -0.2 -1 -2.3 -1 2.3 -2.5 0.2 1.9 1.7 -0.6 2.5z" fill="#fff"/>
+    </svg>` },
+  { key:'albatross', title:'알바트로스', short:'ALB',
+    desc:'파 −3, 하늘을 나는 명작',
+    bg:'linear-gradient(135deg,#1F6FB2,#7FC7E8)',
+    svg:s=>`<svg viewBox="0 0 48 48" width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M4 26 Q14 14 24 22 Q34 14 44 26 Q34 24 24 28 Q14 24 4 26z" fill="#EAF4FB"/>
+      <path d="M6 25 Q14 18 22 23 Q14 23 6 25z" fill="#CFE6F5"/>
+      <path d="M42 25 Q34 18 26 23 Q34 23 42 25z" fill="#CFE6F5"/>
+      <ellipse cx="24" cy="26" rx="7" ry="8" fill="#fff"/>
+      <circle cx="24" cy="21" r="5" fill="#fff"/>
+      <circle cx="22.3" cy="20.5" r="1.2" fill="#274B63"/><circle cx="25.7" cy="20.5" r="1.2" fill="#274B63"/>
+      <path d="M23 23 l2 0 -1 2z" fill="#F5A623"/>
+      <path d="M20 33 l8 0 -4 5z" fill="#F5A623"/>
+    </svg>` },
+  { key:'eagle', title:'이글', short:'EGL',
+    desc:'파 −2, 필드의 지배자',
+    bg:'linear-gradient(135deg,#B8912F,#EAD08A)',
+    svg:s=>`<svg viewBox="0 0 48 48" width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M24 8 Q10 10 8 22 Q6 34 24 42 Q42 34 40 22 Q38 10 24 8z" fill="#6B4A1B"/>
+      <path d="M24 12 Q14 14 13 22 Q20 20 24 22z" fill="#8A6528"/>
+      <path d="M24 12 Q34 14 35 22 Q28 20 24 22z" fill="#8A6528"/>
+      <circle cx="24" cy="22" r="10" fill="#fff"/>
+      <path d="M24 13 a9 9 0 0 1 0 18z" fill="#F3F3F3"/>
+      <circle cx="20.5" cy="20" r="1.7" fill="#3A2E0A"/><circle cx="27.5" cy="20" r="1.7" fill="#3A2E0A"/>
+      <path d="M22 24 L24 27 L26 24 Q24 25 22 24z" fill="#F5A623"/>
+      <path d="M21 23 Q24 26 27 23 L27 25 Q24 27.5 21 25z" fill="#E8951C"/>
+    </svg>` },
+  { key:'birdie', title:'버디', short:'BDY',
+    desc:'파 −1, 오늘도 한 타 세이브',
+    bg:'linear-gradient(135deg,#3F7D5C,#8FC0A2)',
+    svg:s=>`<svg viewBox="0 0 48 48" width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse cx="24" cy="27" rx="12" ry="11" fill="#FFD23F"/>
+      <circle cx="24" cy="17" r="8" fill="#FFD23F"/>
+      <path d="M32 24 Q40 22 41 27 Q37 28 33 28z" fill="#FFB703"/>
+      <circle cx="21.5" cy="16" r="1.6" fill="#3A2E0A"/><circle cx="27" cy="16" r="1.6" fill="#3A2E0A"/>
+      <path d="M23 19 l3 0 -1.5 2.5z" fill="#F5822B"/>
+      <circle cx="19" cy="20" r="2.2" fill="#FF9EB5" opacity=".7"/><circle cx="29" cy="20" r="2.2" fill="#FF9EB5" opacity=".7"/>
+      <path d="M12 12 Q10 8 14 8 Q13 11 16 12z" fill="#7FB89A"/>
+    </svg>` },
+];
+const ACH_BY_KEY=Object.fromEntries(ACHIEVEMENTS.map(a=>[a.key,a]));
+
+/* 홀별 타수+파로 특별기록 집계. 반환: {holeInOne,albatross,eagle,birdie} */
+function achFromHoles(holes,pars){
+  const out={holeInOne:0,albatross:0,eagle:0,birdie:0};
+  if(!Array.isArray(holes)) return out;
+  for(let h=0;h<18;h++){
+    const v=holes[h], p=pars[h];
+    if(typeof v!=='number'||typeof p!=='number') continue;
+    if(v===1){ out.holeInOne++; continue; } // 홀인원은 타수 자체가 1
+    const d=v-p;
+    if(d<=-3) out.albatross++;
+    else if(d===-2) out.eagle++;
+    else if(d===-1) out.birdie++;
+  }
+  return out;
+}
+/* 멤버별 시즌 특별기록 누계 */
+function seasonAchievements(memberId){
+  const total={holeInOne:0,albatross:0,eagle:0,birdie:0};
+  sortedRounds().forEach(r=>{
+    const holes=fullHoles(r,memberId);
+    if(!holes) return;
+    const a=achFromHoles(holes,getPars(r));
+    total.holeInOne+=a.holeInOne; total.albatross+=a.albatross;
+    total.eagle+=a.eagle; total.birdie+=a.birdie;
+  });
+  return total;
+}
+/* 시즌 전체 특별기록 합계(안내 카드용) */
+function seasonAchievementTotals(){
+  const g={holeInOne:0,albatross:0,eagle:0,birdie:0};
+  db.members.forEach(m=>{const a=seasonAchievements(m.id);g.holeInOne+=a.holeInOne;g.albatross+=a.albatross;g.eagle+=a.eagle;g.birdie+=a.birdie;});
+  return g;
+}
+
+/* ── 저장소 (브라우저 로컬 저장 + 파일 내장 데이터) ─────────────────
+   · 입력·수정은 이 기기 브라우저(localStorage)에 저장됩니다.
+   · "공유용 내보내기"로 만든 파일에는 데이터가 내장(EMBED)되어,
+     친구들이 링크로 열면 그 내장 데이터를 읽어 결과만 보여줍니다.        */
+const PHOTO_PREFIX='golfphoto_';
+const photoKey=id=>`${PHOTO_PREFIX}${id}`;
+// 이 파일에 내장된 데이터(공유본일 때만 존재). 내보내기 시 아래 값이 채워집니다.
+window.__EMBED__ = window.__EMBED__ || null;
+let isViewerOnly=false; // 이 기기에 저장된 데이터가 없고 내장 데이터로만 볼 때 true
+
 async function load(){
+  let loaded=false;
+  // 1) 이 기기(localStorage)에 저장된 내 데이터 우선
   try{
-    const r=await window.storage.get(KEY,true);
-    if(r&&r.value){ db=JSON.parse(r.value); if(!db.settings) db.settings={method:'avg'}; }
-    document.getElementById('notice').classList.remove('hide');
+    const raw=localStorage.getItem(KEY);
+    if(raw){ db=JSON.parse(raw); if(!db.settings) db.settings={method:'avg'}; loaded=true; }
   }catch(e){}
+  // 2) 없으면 파일에 내장된 공유 데이터 사용(친구들이 링크로 열었을 때)
+  if(!loaded && window.__EMBED__ && window.__EMBED__.members){
+    db=window.__EMBED__;
+    if(!db.settings) db.settings={method:'avg'};
+    isViewerOnly=true;
+    // 내장 사진을 메모리 캐시에 올림
+    if(window.__EMBED__.photos){ for(const id in window.__EMBED__.photos){ _photoCache[id]=window.__EMBED__.photos[id]; } }
+  }
+  const n=document.getElementById('notice');
+  if(n){
+    if(isViewerOnly){
+      n.innerHTML='👀 <b>결과 보기</b> 화면입니다. 기록은 운영자가 관리하며, 여기서는 순위·기록·사진첩을 볼 수 있습니다.';
+    } else {
+      n.innerHTML='✍️ <b>내 기기 저장</b> 모드입니다. 입력·수정은 이 기기에 저장됩니다. 친구들과 공유하려면 <b>멤버 탭 → 공유용 내보내기</b>로 파일을 만들어 올리세요.';
+    }
+    n.classList.remove('hide');
+  }
 }
 async function save(){
-  try{ await window.storage.set(KEY,JSON.stringify(db),true); }
-  catch(e){ toast('저장에 실패했어요. 네트워크 확인 후 다시 시도해 주세요.'); }
+  if(isViewerOnly) return; // 공유본(보기 전용)에서는 저장하지 않음
+  try{ localStorage.setItem(KEY,JSON.stringify(db)); }
+  catch(e){ toast('저장 공간이 부족할 수 있어요. 사진이 너무 많으면 정리해 주세요.'); }
 }
-/* 추억 사진은 라운드별 별도 키에 저장(용량 분리) */
-const photoKey=id=>`golfphoto_${id}`;
-async function savePhoto(id,dataURL){ try{ await window.storage.set(photoKey(id),dataURL,true); return true; }catch(e){ return false; } }
-async function getPhoto(id){ try{ const r=await window.storage.get(photoKey(id),true); return r&&r.value?r.value:null; }catch(e){ return null; } }
-async function delPhoto(id){ try{ await window.storage.delete(photoKey(id),true); }catch(e){} }
+/* 추억 사진: 라운드별 별도 저장(용량 분리) — 로컬 저장 + 메모리 캐시 */
+const _photoCache={};
+async function savePhoto(id,dataURL){
+  _photoCache[id]=dataURL;
+  if(isViewerOnly) return true;
+  try{ localStorage.setItem(photoKey(id),dataURL); return true; }catch(e){ toast('사진 저장 공간이 부족해요.'); return false; }
+}
+async function getPhoto(id){
+  if(_photoCache[id]!=null) return _photoCache[id];
+  try{ const v=localStorage.getItem(photoKey(id)); if(v){ _photoCache[id]=v; return v; } }catch(e){}
+  return null;
+}
+async function delPhoto(id){
+  delete _photoCache[id];
+  if(isViewerOnly) return;
+  try{ localStorage.removeItem(photoKey(id)); }catch(e){}
+}
+/* 모든 사진을 한 번에 모아오기(공유용 내보내기에 사용) */
+async function collectAllPhotos(){
+  const photos={};
+  for(const r of db.rounds){ if(r.hasPhoto){ const p=await getPhoto(r.id); if(p) photos[r.id]=p; } }
+  return photos;
+}
 /* ── 백업 · 복원 ───────────────── */
 async function exportBackup(withPhotos){
   const data={app:'oseong-golf',version:1,exportedAt:new Date().toISOString(),
@@ -281,6 +435,32 @@ async function exportBackup(withPhotos){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
   toast(withPhotos?'사진 포함 백업을 내려받았어요.':'기록 백업을 내려받았어요.');
+}
+// 공유용 index.html 만들기: 현재 데이터를 파일에 내장해 내려받기
+async function exportShareableSite(){
+  toast('공유용 파일을 만드는 중이에요…');
+  try{
+    const photos=await collectAllPhotos();
+    const embed={app:'birdie-golf',version:1,exportedAt:new Date().toISOString(),
+      members:db.members,rounds:db.rounds,settings:db.settings||{method:'avg'},photos};
+    // 현재 페이지 전체 HTML을 복제한 뒤, 데이터 내장 스크립트를 심는다
+    let html=document.documentElement.outerHTML;
+    // 기존에 심긴 내장 스크립트가 있으면 제거
+    html=html.replace(/<script id="birdie-embed">[\s\S]*?<\/script>/,'');
+    const embedScript=`<script id="birdie-embed">window.__EMBED__=${JSON.stringify(embed).replace(/</g,'\\u003c')};<\/script>`;
+    // <head> 시작 직후에 삽입해 앱 실행 전에 데이터가 준비되게 함
+    if(/<head[^>]*>/i.test(html)){ html=html.replace(/(<head[^>]*>)/i,`$1${embedScript}`); }
+    else { html=embedScript+html; }
+    const full='<!doctype html>\n'+html;
+    const blob=new Blob([full],{type:'text/html'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='index.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    const mb=(full.length/1048576).toFixed(1);
+    toast(`공유용 index.html을 내려받았어요. (약 ${mb}MB) GitHub에 덮어씌워 올리세요.`);
+  }catch(e){ console.error(e); toast('공유용 파일 만들기에 실패했어요.'); }
 }
 async function importBackup(file){
   try{
@@ -493,16 +673,34 @@ function viewBoard(){
     </div>`;
   });
   html+=`</div>`;
+  // 특별기록 트로피 안내 카드
+  const gtot=seasonAchievementTotals();
+  const anyAch=gtot.holeInOne+gtot.albatross+gtot.eagle+gtot.birdie>0;
+  html+=`<div class="ach-card"><h2>🏆 특별기록 트로피</h2>
+    <p class="muted" style="font-size:11.5px">홀별 기록이 입력된 라운드에서 자동 집계됩니다. 각 선수의 트로피는 시즌 순위에도 함께 표시돼요.</p>
+    <div class="ach-legend">
+      ${ACHIEVEMENTS.map(a=>`<div class="ach-item" style="background:${a.bg}">
+        ${a.svg(38)}
+        <div><div class="at">${a.title}</div><div class="ad">${a.desc}</div></div>
+        <div class="atot"><b>${gtot[a.key]}</b><span>회</span></div>
+      </div>`).join('')}
+    </div>
+    ${anyAch?'':'<div class="ach-empty">아직 특별기록이 없어요. 홀별 타수를 입력하면 버디부터 자동으로 쌓입니다. 🐦</div>'}
+  </div>`;
   const st=seasonStats(seasonMethod).filter(s=>s.played>0).sort((a,b)=>b.wins-a.wins||((a.avg??999)-(b.avg??999)));
   html+=`<div class="char-card"><h2>🎭 시즌 순위 <span class="tag">총 ${rs.length}회</span></h2>`;
   st.forEach((s,i)=>{
     const c=RANK_CHARS[Math.min(i,RANK_CHARS.length-1)];
+    const ach=seasonAchievements(s.m.id);
+    const tphy=ACHIEVEMENTS.filter(a=>ach[a.key]>0).map(a=>
+      `<span class="tphy" title="${a.title} ${ach[a.key]}회">${a.svg(20)}<span class="cnt">${ach[a.key]}</span></span>`).join('');
     html+=`<div class="char" style="background:${c.bg};color:${c.fg}">
       <div class="ava">${c.emoji}</div>
       <div class="info">
         <div class="who"><span class="rk">${i+1}위</span>${esc(s.m.name)}${i===0?' 👑':''}</div>
         <div class="role"><b>${c.title}</b> · ${c.line}</div>
         <div class="role" style="opacity:.9;margin-top:2px">우승 ${s.wins||0}회 · 베스트 ${s.best??'–'}타 · ${s.played}라운드</div>
+        ${tphy?`<div class="trophies">${tphy}</div>`:''}
       </div>
       <div class="sc" style="text-align:right"><div class="d" style="opacity:.85">평균</div>${s.avg?s.avg.toFixed(1):'–'}<span style="font-size:12px">타</span></div>
     </div>`;
@@ -785,8 +983,13 @@ function viewMember(){
     <label>평균타수 <span style="font-weight:400;color:var(--ink-soft)">(선택 · 초기 핸디 기준)</span></label>
     <div class="inline"><input type="number" id="m-avg" inputmode="numeric" min="50" max="160" placeholder="예) 90"><button class="btn" id="m-add">추가</button></div>
     <p class="muted" style="margin-top:12px">평균타수를 넣으면 <b>첫 라운드부터 평균 대비 순위</b>가 계산됩니다(실제 라운드가 3회 쌓이면 자동으로 최근 기록 기준으로 넘어갑니다). 비워두면 3회를 채우기 전까지 그 멤버는 평균 대비 순위에서 제외됩니다.</p></div>
+    ${isViewerOnly?'':`<div class="card" style="border:1.5px solid var(--gold)"><h2>🔗 공유용 내보내기</h2>
+    <p class="muted" style="margin-bottom:12px">라운드를 입력·수정한 뒤 이 버튼을 누르면, 지금까지의 <b>모든 기록과 사진이 담긴 index.html</b> 파일이 만들어집니다. 이 파일을 GitHub 저장소에 덮어씌워 올리면(Commit) 친구들이 링크에서 최신 결과를 보게 됩니다.</p>
+    <button class="btn" id="share-export" style="background:var(--gold);color:#2A2410">📤 공유용 index.html 만들기</button>
+    <p class="muted" style="font-size:11px;margin-top:10px">사진이 많으면 파일이 커집니다. 친구들은 이 파일을 <b>보기만</b> 하고, 입력·수정은 이 기기에서만 됩니다.</p>
+    </div>`}
     <div class="card"><h2>💾 백업 · 복원</h2>
-    <p class="muted" style="margin-bottom:12px">전체 기록을 파일로 저장해 두면, 앱에 문제가 생기거나 새 링크로 옮길 때 그대로 되살릴 수 있습니다. 라운드가 끝날 때마다 한 번씩 백업해 두시길 권합니다.</p>
+    <p class="muted" style="margin-bottom:12px">전체 기록을 파일로 저장해 두면, 앱에 문제가 생기거나 기기를 바꿀 때 그대로 되살릴 수 있습니다. 라운드가 끝날 때마다 한 번씩 백업해 두시길 권합니다.</p>
     <button class="btn" id="bk-full">전체 백업 내려받기 <span style="font-weight:400;font-size:12px;opacity:.85">(사진 포함)</span></button>
     <button class="btn" id="bk-lite" style="background:none;color:var(--board);border:1px solid var(--line);margin-top:8px">기록만 내려받기 <span style="font-weight:400;font-size:12px;opacity:.8">(가벼움 · 사진 제외)</span></button>
     <button class="btn ghost" id="bk-import" style="margin-top:8px">백업 파일에서 복원하기</button>
@@ -796,6 +999,13 @@ function viewMember(){
 
 /* ── 렌더 & 이벤트 ───────────────── */
 function render(){
+  // 보기 전용(공유본)에서는 입력·멤버 탭을 숨김
+  if(isViewerOnly){
+    document.querySelectorAll('nav button').forEach(b=>{
+      if(b.dataset.tab==='entry'||b.dataset.tab==='member') b.style.display='none';
+    });
+    if(tab==='entry'||tab==='member') tab='board';
+  }
   const v=document.getElementById('view');
   v.innerHTML = tab==='board'?viewBoard():tab==='entry'?viewEntry():tab==='hist'?viewHist():tab==='album'?viewAlbum():viewMember();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
@@ -823,6 +1033,8 @@ async function loadHistPhotos(){
   }
 }
 function bind(){
+  const shx=document.getElementById('share-export');
+  if(shx) shx.onclick=()=>exportShareableSite();
   const bkFull=document.getElementById('bk-full');
   if(bkFull) bkFull.onclick=()=>exportBackup(true);
   const bkLite=document.getElementById('bk-lite');
